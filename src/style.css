@@ -87,6 +87,20 @@ button:focus-visible {
   box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.5);
 }
 
+#clearButton {
+  margin-top: 20px;
+  padding: 10px 20px;
+  font-size: 1em;
+  cursor: pointer;
+  background-color: #f0f0f0;
+  border: 1px solid black;
+  border-radius: 8px;
+}
+
+#clearButton:hover {
+  background-color: #e0e0e0;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
