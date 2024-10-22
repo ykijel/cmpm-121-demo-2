@@ -18,58 +18,83 @@ const undoButton = document.getElementById("undoButton")!;
 const redoButton = document.getElementById("redoButton")!;
 const clearButton = document.getElementById("clearButton")!;
 
-// Store strokes and redo stack
-let strokes: { x: number; y: number }[][] = [];
-let redoStack: { x: number; y: number }[][] = [];
-let currentStroke: { x: number; y: number }[] = [];
+// Class to represent a line drawn by the user
+class MarkerLine {
+  points: { x: number; y: number }[];
+
+  constructor(initialX: number, initialY: number) {
+    this.points = [{ x: initialX, y: initialY }];
+  }
+
+  // Method to add a new point to the line
+  drag(x: number, y: number) {
+    this.points.push({ x, y });
+  }
+
+  // Method to draw the line on the canvas
+  display(ctx: CanvasRenderingContext2D) {
+    if (this.points.length < 2) return;
+
+    ctx.beginPath();
+    ctx.lineWidth = 5;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "black";
+
+    ctx.moveTo(this.points[0].x, this.points[0].y);
+    for (let i = 1; i < this.points.length; i++) {
+      ctx.lineTo(this.points[i].x, this.points[i].y);
+    }
+
+    ctx.stroke();
+  }
+}
+
+// Store lines and redo stack
+let strokes: MarkerLine[] = [];
+let redoStack: MarkerLine[] = [];
+let currentLine: MarkerLine | null = null;
 let isDrawing = false;
 
-// Function to start a new stroke
+// Start a new line when the user starts drawing
 const startDrawing = (e: MouseEvent) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
   isDrawing = true;
-  currentStroke = [];
-  addPoint(e); // Add the initial point of the stroke
+  currentLine = new MarkerLine(x, y); // Create a new line
 };
 
-// Function to stop drawing and push the stroke to the strokes array
+// Stop drawing and add the line to the strokes array
 const stopDrawing = () => {
-  if (!isDrawing) return;
+  if (!isDrawing || !currentLine) return;
+
   isDrawing = false;
-  if (currentStroke.length > 0) {
-    strokes.push(currentStroke); // Add current stroke to strokes array
-    redoStack = []; // Clear redo stack on new drawing
-    currentStroke = [];
-    canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
-  }
+  strokes.push(currentLine); // Add the line to strokes
+  redoStack = []; // Clear redo stack
+  currentLine = null; // Reset current line
+  canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
 };
 
-// Function to add a point to the current stroke
+// Add points to the current line as the user drags the mouse
 const addPoint = (e: MouseEvent) => {
-  if (!isDrawing) return;
+  if (!isDrawing || !currentLine) return;
 
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
 
-  currentStroke.push({ x, y });
+  currentLine.drag(x, y); // Add the point to the line
   canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
 };
 
-// Function to clear and redraw the canvas based on the stored strokes
+// Redraw the canvas based on the strokes
 const redrawCanvas = () => {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+
+  // Display all the lines in the strokes array
   for (const stroke of strokes) {
-    if (stroke.length === 0) continue;
-    ctx.beginPath();
-    ctx.lineWidth = 5;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "black";
-    ctx.moveTo(stroke[0].x, stroke[0].y);
-    for (let i = 1; i < stroke.length; i++) {
-      const point = stroke[i];
-      ctx.lineTo(point.x, point.y);
-    }
-    ctx.stroke();
+    stroke.display(ctx); // Use the display method to draw the line
   }
 };
 
@@ -77,7 +102,7 @@ const redrawCanvas = () => {
 undoButton.addEventListener("click", () => {
   if (strokes.length > 0) {
     const lastStroke = strokes.pop()!; // Remove the last stroke
-    redoStack.push(lastStroke); // Add the last stroke to the redo stack
+    redoStack.push(lastStroke); // Add it to the redo stack
     canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
   }
 });
@@ -85,8 +110,8 @@ undoButton.addEventListener("click", () => {
 // Redo functionality
 redoButton.addEventListener("click", () => {
   if (redoStack.length > 0) {
-    const lastUndoneStroke = redoStack.pop()!; // Remove the last stroke from redo stack
-    strokes.push(lastUndoneStroke); // Add it back to strokes array
+    const lastUndoneStroke = redoStack.pop()!; // Remove from redo stack
+    strokes.push(lastUndoneStroke); // Add it back to strokes
     canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
   }
 });
@@ -98,7 +123,7 @@ clearButton.addEventListener("click", () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
 });
 
-// Event listeners for drawing on canvas
+// Event listeners for drawing on the canvas
 canvas.addEventListener("mousedown", startDrawing);
 canvas.addEventListener("mousemove", addPoint);
 canvas.addEventListener("mouseup", stopDrawing);
