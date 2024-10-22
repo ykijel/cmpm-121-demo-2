@@ -3,7 +3,7 @@ import "./style.css";
 const APP_NAME = "Yahli's Game";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
-// Set up the app UI with canvas, tool buttons, and undo/redo buttons
+// Set up the app UI with canvas, tool buttons, undo/redo buttons, and sticker buttons
 app.innerHTML = `
   <h1>${APP_NAME}</h1>
   <canvas id="gameCanvas" width="256" height="256"></canvas>
@@ -16,6 +16,11 @@ app.innerHTML = `
     <button id="redoButton">Redo</button>
     <button id="clearButton">Clear Canvas</button>
   </div>
+  <div>
+    <button id="sticker1">🌟</button>
+    <button id="sticker2">🎃</button>
+    <button id="sticker3">❤️</button>
+  </div>
 `;
 
 const canvas = document.getElementById("gameCanvas") as HTMLCanvasElement;
@@ -26,10 +31,20 @@ const clearButton = document.getElementById("clearButton")!;
 const thinTool = document.getElementById("thinTool")!;
 const thickTool = document.getElementById("thickTool")!;
 
-// Marker thickness state
+// Sticker buttons
+const sticker1Button = document.getElementById("sticker1")!;
+const sticker2Button = document.getElementById("sticker2")!;
+const sticker3Button = document.getElementById("sticker3")!;
+
+// Marker thickness state and sticker selection
 let currentThickness = 2; // Default to thin marker
 let isDrawing = false;
-let toolPreview: ToolPreview | null = null; // Holds the current tool preview object
+let toolPreview: ToolPreview | null = null;
+let currentSticker: Sticker | null = null; // Holds the selected sticker
+let stickerPreview: StickerPreview | null = null; // Holds the sticker preview
+
+// New state to track whether we're in "sticker mode" or "marker mode"
+let isStickerMode = false; // Default to marker mode
 
 // Class to represent a line drawn by the user with a specific thickness
 class MarkerLine {
@@ -92,127 +107,233 @@ class ToolPreview {
   }
 }
 
-// Store lines and redo stack
+// Class to represent a sticker
+class Sticker {
+  x: number;
+  y: number;
+  sticker: string;
+
+  constructor(x: number, y: number, sticker: string) {
+    this.x = x;
+    this.y = y;
+    this.sticker = sticker;
+  }
+
+  // Method to draw the sticker on the canvas
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.font = "32px Arial";
+    ctx.fillText(this.sticker, this.x - 16, this.y + 16); // Centering the sticker
+  }
+
+  // Method to reposition the sticker
+  drag(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+// Class to represent the sticker preview
+class StickerPreview {
+  x: number;
+  y: number;
+  sticker: string;
+
+  constructor(x: number, y: number, sticker: string) {
+    this.x = x;
+    this.y = y;
+    this.sticker = sticker;
+  }
+
+  // Method to draw the sticker preview on the canvas
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.font = "32px Arial";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.fillText(this.sticker, this.x - 16, this.y + 16); // Centering the sticker preview
+  }
+
+  // Update the position of the sticker preview
+  updatePosition(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+// Store lines, stickers, and redo stack
 let strokes: MarkerLine[] = [];
-let redoStack: MarkerLine[] = [];
+let stickers: Sticker[] = [];
+let redoStack: (MarkerLine | Sticker)[] = [];
 let currentLine: MarkerLine | null = null;
 
-// Tool selection logic
-const selectTool = (tool: string) => {
-  if (tool === "thin") {
-    currentThickness = 2; // Set thin marker thickness
-    thinTool.classList.add("selectedTool"); // Add visual feedback
-    thickTool.classList.remove("selectedTool");
-  } else if (tool === "thick") {
-    currentThickness = 8; // Set thick marker thickness
-    thickTool.classList.add("selectedTool"); // Add visual feedback
-    thinTool.classList.remove("selectedTool");
+// ** Marker Drawing Logic **
+const startMarkerLine = (e: MouseEvent) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  currentLine = new MarkerLine(x, y, currentThickness);
+  strokes.push(currentLine);
+  isDrawing = true;
+  redoStack = []; // Clear redo stack
+};
+
+const continueMarkerLine = (e: MouseEvent) => {
+  if (!isDrawing || !currentLine) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  currentLine.drag(x, y);
+  canvas.dispatchEvent(new Event("drawing-changed"));
+};
+
+const finishMarkerLine = () => {
+  isDrawing = false;
+  currentLine = null;
+};
+
+// ** Sticker Logic **
+const startStickerPlacement = (e: MouseEvent) => {
+  if (!isStickerMode) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  if (currentSticker) {
+    stickers.push(new Sticker(x, y, currentSticker.sticker)); // Place the sticker
+    redoStack = []; // Clear redo stack
+    canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
+    stickerPreview = null; // Hide the preview after placing
   }
 };
 
-// Start a new line when the user starts drawing
-const startDrawing = (e: MouseEvent) => {
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-
-  isDrawing = true;
-  currentLine = new MarkerLine(x, y, currentThickness); // Create a new line with selected thickness
-  toolPreview = null; // Hide the tool preview while drawing
-};
-
-// Stop drawing and add the line to the strokes array
-const stopDrawing = () => {
-  if (!isDrawing || !currentLine) return;
-
-  isDrawing = false;
-  strokes.push(currentLine); // Add the line to strokes
-  redoStack = []; // Clear redo stack
-  currentLine = null; // Reset current line
-  canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
-};
-
-// Add points to the current line as the user drags the mouse
-const addPoint = (e: MouseEvent) => {
-  if (!isDrawing || !currentLine) return;
+// Update sticker preview position as the mouse moves
+const updateStickerPreview = (e: MouseEvent) => {
+  if (!isStickerMode) return; // Only update preview in sticker mode
 
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
 
-  currentLine.drag(x, y); // Add the point to the line
-  canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
+  if (currentSticker && !isDrawing) {
+    if (!stickerPreview) {
+      stickerPreview = new StickerPreview(x, y, currentSticker.sticker); // Create sticker preview
+    } else {
+      stickerPreview.updatePosition(x, y); // Update sticker preview position
+    }
+    canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event to redraw the canvas
+  }
 };
 
-// Redraw the canvas based on the strokes
+// Redraw the canvas based on the strokes and stickers
 const redrawCanvas = () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
 
   // Display all the lines in the strokes array
   for (const stroke of strokes) {
-    stroke.display(ctx); // Use the display method to draw the line
+    stroke.display(ctx);
   }
 
-  // Display the tool preview if it exists
-  if (!isDrawing && toolPreview) {
-    toolPreview.draw(ctx); // Draw the preview circle
+  // Display all the stickers in the stickers array
+  for (const sticker of stickers) {
+    sticker.draw(ctx);
+  }
+
+  // Display the tool preview if it exists and user is not drawing or in sticker mode
+  if (!isDrawing && toolPreview && !isStickerMode) {
+    toolPreview.draw(ctx);
+  }
+
+  // Display sticker preview if in sticker mode
+  if (stickerPreview) {
+    stickerPreview.draw(ctx);
   }
 };
 
-// Undo functionality
-undoButton.addEventListener("click", () => {
-  if (strokes.length > 0) {
-    const lastStroke = strokes.pop()!; // Remove the last stroke
-    redoStack.push(lastStroke); // Add it to the redo stack
-    canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
-  }
+// ** Tool Selection Logic **
+thinTool.addEventListener("click", () => {
+  currentThickness = 2; // Thin marker
+  isStickerMode = false; // Switch to marker mode
+  currentSticker = null; // No sticker selected
+  toolPreview = new ToolPreview(0, 0, currentThickness); // Update tool preview
 });
 
-// Redo functionality
-redoButton.addEventListener("click", () => {
-  if (redoStack.length > 0) {
-    const lastUndoneStroke = redoStack.pop()!; // Remove from redo stack
-    strokes.push(lastUndoneStroke); // Add it back to strokes
-    canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
-  }
+thickTool.addEventListener("click", () => {
+  currentThickness = 6; // Thick marker
+  isStickerMode = false; // Switch to marker mode
+  currentSticker = null; // No sticker selected
+  toolPreview = new ToolPreview(0, 0, currentThickness); // Update tool preview
 });
 
-// Clear button functionality
-clearButton.addEventListener("click", () => {
-  strokes = [];
-  redoStack = [];
-  ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+// ** Sticker Selection Logic **
+sticker1Button.addEventListener("click", () => {
+  currentSticker = new Sticker(0, 0, "🌟"); // Select sticker
+  isStickerMode = true; // Switch to sticker mode
+  toolPreview = null; // Hide tool preview in sticker mode
 });
 
-// Event listener for mouse movement to handle tool preview
+sticker2Button.addEventListener("click", () => {
+  currentSticker = new Sticker(0, 0, "🎃"); // Select sticker
+  isStickerMode = true; // Switch to sticker mode
+  toolPreview = null; // Hide tool preview in sticker mode
+});
+
+sticker3Button.addEventListener("click", () => {
+  currentSticker = new Sticker(0, 0, "❤️"); // Select sticker
+  isStickerMode = true; // Switch to sticker mode
+  toolPreview = null; // Hide tool preview in sticker mode
+});
+
+// Event listeners for drawing markers
+canvas.addEventListener("mousedown", (e) => {
+  if (!isStickerMode) startMarkerLine(e);
+});
 canvas.addEventListener("mousemove", (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-
-  // Update or create the tool preview
-  if (!isDrawing) {
-    if (!toolPreview) {
-      toolPreview = new ToolPreview(x, y, currentThickness); // Create preview
-    } else {
-      toolPreview.updatePosition(x, y); // Update preview position
-    }
-    canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event to redraw the canvas
+  if (isStickerMode) {
+    updateStickerPreview(e); // Update sticker preview when moving the mouse
+  } else {
+    continueMarkerLine(e);
   }
 });
+canvas.addEventListener("mouseup", finishMarkerLine);
+canvas.addEventListener("mouseleave", finishMarkerLine);
 
-// Event listeners for drawing on the canvas
-canvas.addEventListener("mousedown", startDrawing);
-canvas.addEventListener("mousemove", addPoint);
-canvas.addEventListener("mouseup", stopDrawing);
-canvas.addEventListener("mouseout", stopDrawing);
+// Event listeners for placing stickers
+canvas.addEventListener("click", (e) => {
+  if (isStickerMode) startStickerPlacement(e);
+});
 
-// Observer for "drawing-changed" event to redraw the canvas
+// Redraw the canvas whenever the "drawing-changed" event is dispatched
 canvas.addEventListener("drawing-changed", redrawCanvas);
 
-// Tool button event listeners
-thinTool.addEventListener("click", () => selectTool("thin"));
-thickTool.addEventListener("click", () => selectTool("thick"));
+// Undo, redo, and clear logic remain the same as before
+undoButton.addEventListener("click", () => {
+  if (strokes.length > 0) {
+    const lastStroke = strokes.pop()!;
+    redoStack.push(lastStroke);
+    canvas.dispatchEvent(new Event("drawing-changed"));
+  } else if (stickers.length > 0) {
+    const lastSticker = stickers.pop()!;
+    redoStack.push(lastSticker);
+    canvas.dispatchEvent(new Event("drawing-changed"));
+  }
+});
 
-// Set default tool
-selectTool("thin");
+redoButton.addEventListener("click", () => {
+  if (redoStack.length > 0) {
+    const lastRedo = redoStack.pop()!;
+    if (lastRedo instanceof MarkerLine) {
+      strokes.push(lastRedo);
+    } else if (lastRedo instanceof Sticker) {
+      stickers.push(lastRedo);
+    }
+    canvas.dispatchEvent(new Event("drawing-changed"));
+  }
+});
+
+clearButton.addEventListener("click", () => {
+  strokes = [];
+  stickers = [];
+  redoStack = [];
+  canvas.dispatchEvent(new Event("drawing-changed"));
+});
