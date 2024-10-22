@@ -28,6 +28,8 @@ const thickTool = document.getElementById("thickTool")!;
 
 // Marker thickness state
 let currentThickness = 2; // Default to thin marker
+let isDrawing = false;
+let toolPreview: ToolPreview | null = null; // Holds the current tool preview object
 
 // Class to represent a line drawn by the user with a specific thickness
 class MarkerLine {
@@ -62,11 +64,38 @@ class MarkerLine {
   }
 }
 
+// Class to represent the tool preview
+class ToolPreview {
+  x: number;
+  y: number;
+  thickness: number;
+
+  constructor(x: number, y: number, thickness: number) {
+    this.x = x;
+    this.y = y;
+    this.thickness = thickness;
+  }
+
+  // Method to draw the preview circle on the canvas
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.beginPath();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.arc(this.x, this.y, this.thickness / 2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Update the position of the tool preview
+  updatePosition(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
 // Store lines and redo stack
 let strokes: MarkerLine[] = [];
 let redoStack: MarkerLine[] = [];
 let currentLine: MarkerLine | null = null;
-let isDrawing = false;
 
 // Tool selection logic
 const selectTool = (tool: string) => {
@@ -89,6 +118,7 @@ const startDrawing = (e: MouseEvent) => {
 
   isDrawing = true;
   currentLine = new MarkerLine(x, y, currentThickness); // Create a new line with selected thickness
+  toolPreview = null; // Hide the tool preview while drawing
 };
 
 // Stop drawing and add the line to the strokes array
@@ -122,6 +152,11 @@ const redrawCanvas = () => {
   for (const stroke of strokes) {
     stroke.display(ctx); // Use the display method to draw the line
   }
+
+  // Display the tool preview if it exists
+  if (!isDrawing && toolPreview) {
+    toolPreview.draw(ctx); // Draw the preview circle
+  }
 };
 
 // Undo functionality
@@ -147,6 +182,23 @@ clearButton.addEventListener("click", () => {
   strokes = [];
   redoStack = [];
   ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+});
+
+// Event listener for mouse movement to handle tool preview
+canvas.addEventListener("mousemove", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  // Update or create the tool preview
+  if (!isDrawing) {
+    if (!toolPreview) {
+      toolPreview = new ToolPreview(x, y, currentThickness); // Create preview
+    } else {
+      toolPreview.updatePosition(x, y); // Update preview position
+    }
+    canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event to redraw the canvas
+  }
 });
 
 // Event listeners for drawing on the canvas
