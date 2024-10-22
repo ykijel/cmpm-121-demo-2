@@ -3,13 +3,19 @@ import "./style.css";
 const APP_NAME = "Yahli's Game";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
-// Set the document title and add canvas + buttons
+// Set up the app UI with canvas, tool buttons, and undo/redo buttons
 app.innerHTML = `
   <h1>${APP_NAME}</h1>
   <canvas id="gameCanvas" width="256" height="256"></canvas>
-  <button id="undoButton">Undo</button>
-  <button id="redoButton">Redo</button>
-  <button id="clearButton">Clear Canvas</button>
+  <div>
+    <button id="thinTool">Thin Marker</button>
+    <button id="thickTool">Thick Marker</button>
+  </div>
+  <div>
+    <button id="undoButton">Undo</button>
+    <button id="redoButton">Redo</button>
+    <button id="clearButton">Clear Canvas</button>
+  </div>
 `;
 
 const canvas = document.getElementById("gameCanvas") as HTMLCanvasElement;
@@ -17,13 +23,20 @@ const ctx = canvas.getContext("2d")!;
 const undoButton = document.getElementById("undoButton")!;
 const redoButton = document.getElementById("redoButton")!;
 const clearButton = document.getElementById("clearButton")!;
+const thinTool = document.getElementById("thinTool")!;
+const thickTool = document.getElementById("thickTool")!;
 
-// Class to represent a line drawn by the user
+// Marker thickness state
+let currentThickness = 2; // Default to thin marker
+
+// Class to represent a line drawn by the user with a specific thickness
 class MarkerLine {
   points: { x: number; y: number }[];
+  thickness: number;
 
-  constructor(initialX: number, initialY: number) {
+  constructor(initialX: number, initialY: number, thickness: number) {
     this.points = [{ x: initialX, y: initialY }];
+    this.thickness = thickness;
   }
 
   // Method to add a new point to the line
@@ -31,12 +44,12 @@ class MarkerLine {
     this.points.push({ x, y });
   }
 
-  // Method to draw the line on the canvas
+  // Method to draw the line on the canvas with its specific thickness
   display(ctx: CanvasRenderingContext2D) {
     if (this.points.length < 2) return;
 
     ctx.beginPath();
-    ctx.lineWidth = 5;
+    ctx.lineWidth = this.thickness;
     ctx.lineCap = "round";
     ctx.strokeStyle = "black";
 
@@ -55,6 +68,19 @@ let redoStack: MarkerLine[] = [];
 let currentLine: MarkerLine | null = null;
 let isDrawing = false;
 
+// Tool selection logic
+const selectTool = (tool: string) => {
+  if (tool === "thin") {
+    currentThickness = 2; // Set thin marker thickness
+    thinTool.classList.add("selectedTool"); // Add visual feedback
+    thickTool.classList.remove("selectedTool");
+  } else if (tool === "thick") {
+    currentThickness = 8; // Set thick marker thickness
+    thickTool.classList.add("selectedTool"); // Add visual feedback
+    thinTool.classList.remove("selectedTool");
+  }
+};
+
 // Start a new line when the user starts drawing
 const startDrawing = (e: MouseEvent) => {
   const rect = canvas.getBoundingClientRect();
@@ -62,7 +88,7 @@ const startDrawing = (e: MouseEvent) => {
   const y = e.clientY - rect.top;
 
   isDrawing = true;
-  currentLine = new MarkerLine(x, y); // Create a new line
+  currentLine = new MarkerLine(x, y, currentThickness); // Create a new line with selected thickness
 };
 
 // Stop drawing and add the line to the strokes array
@@ -131,3 +157,10 @@ canvas.addEventListener("mouseout", stopDrawing);
 
 // Observer for "drawing-changed" event to redraw the canvas
 canvas.addEventListener("drawing-changed", redrawCanvas);
+
+// Tool button event listeners
+thinTool.addEventListener("click", () => selectTool("thin"));
+thickTool.addEventListener("click", () => selectTool("thick"));
+
+// Set default tool
+selectTool("thin");
