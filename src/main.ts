@@ -3,13 +3,14 @@ import "./style.css";
 const APP_NAME = "Yahli's Game";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
-// Set up the app UI with canvas, tool buttons, undo/redo buttons, and sticker buttons
+// UI remains the same
 app.innerHTML = `
   <h1>${APP_NAME}</h1>
   <canvas id="gameCanvas" width="256" height="256"></canvas>
   <div>
     <button id="thinTool">Thin Marker</button>
     <button id="thickTool">Thick Marker</button>
+    <input type="color" id="colorPicker" value="#000000">
   </div>
   <div>
     <button id="undoButton">Undo</button>
@@ -32,18 +33,19 @@ const thinTool = document.getElementById("thinTool")!;
 const thickTool = document.getElementById("thickTool")!;
 const addStickerButton = document.getElementById("addStickerButton")!;
 const exportButton = document.getElementById("exportButton")!;
+const colorPicker = document.getElementById("colorPicker") as HTMLInputElement;
 
-// Marker thickness state and sticker selection
-let currentThickness = 2; // Default to thin marker
+// State variables
+let currentThickness = 2;
+let currentColor = "#000000";
 let isDrawing = false;
 let toolPreview: ToolPreview | null = null;
-let currentSticker: Sticker | null = null; // Holds the selected sticker
-let stickerPreview: StickerPreview | null = null; // Holds the sticker preview
+let currentSticker: Sticker | null = null;
+let stickerPreview: StickerPreview | null = null;
+let isStickerMode = false;
+let currentRotation = 0; // New state for tracking current rotation
 
-// New state to track whether we're in "sticker mode" or "marker mode"
-let isStickerMode = false; // Default to marker mode
-
-// Array of stickers, including initial stickers and custom stickers
+// Array of stickers
 let stickers = [
   { emoji: "🌸" },
   { emoji: "✨" },
@@ -52,44 +54,50 @@ let stickers = [
   { emoji: "🍀" },
 ];
 
-// Create buttons for each sticker in the stickers array
+// Function to get random rotation (in radians)
+const getRandomRotation = () => {
+  return Math.random() * Math.PI * 2;
+};
+
+// Updated create buttons function to handle rotation
 const stickerButtonsContainer = document.getElementById("stickerButtons")!;
 const createStickerButtons = () => {
   stickerButtonsContainer.innerHTML = "";
   stickers.forEach((sticker, index) => {
     const button = document.createElement("button");
     button.textContent = sticker.emoji;
-    button.addEventListener("click", () => selectSticker(index));
+    button.addEventListener("click", () => {
+      // Get new random rotation each time button is clicked
+      currentRotation = getRandomRotation();
+      selectSticker(index);
+    });
     stickerButtonsContainer.appendChild(button);
   });
 };
 
-// Initialize sticker buttons
-createStickerButtons();
-
-// Class to represent a line drawn by the user with a specific thickness
+// MarkerLine class remains the same
 class MarkerLine {
   points: { x: number; y: number }[];
   thickness: number;
+  color: string;
 
-  constructor(initialX: number, initialY: number, thickness: number) {
+  constructor(initialX: number, initialY: number, thickness: number, color: string) {
     this.points = [{ x: initialX, y: initialY }];
     this.thickness = thickness;
+    this.color = color;
   }
 
-  // Method to add a new point to the line
   drag(x: number, y: number) {
     this.points.push({ x, y });
   }
 
-  // Method to draw the line on the canvas with its specific thickness
   display(ctx: CanvasRenderingContext2D) {
     if (this.points.length < 2) return;
 
     ctx.beginPath();
     ctx.lineWidth = this.thickness;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "black";
+    ctx.strokeStyle = this.color;
 
     ctx.moveTo(this.points[0].x, this.points[0].y);
     for (let i = 1; i < this.points.length; i++) {
@@ -100,79 +108,90 @@ class MarkerLine {
   }
 }
 
-// Class to represent the tool preview
 class ToolPreview {
   x: number;
   y: number;
   thickness: number;
+  color: string;
 
-  constructor(x: number, y: number, thickness: number) {
+  constructor(x: number, y: number, thickness: number, color: string) {
     this.x = x;
     this.y = y;
     this.thickness = thickness;
+    this.color = color;
   }
 
-  // Method to draw the preview circle on the canvas
   draw(ctx: CanvasRenderingContext2D) {
     ctx.beginPath();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.strokeStyle = this.color;
     ctx.arc(this.x, this.y, this.thickness / 2, 0, Math.PI * 2);
     ctx.stroke();
   }
 
-  // Update the position of the tool preview
   updatePosition(x: number, y: number) {
     this.x = x;
     this.y = y;
   }
 }
 
-// Class to represent a sticker
+// Updated Sticker class with rotation
 class Sticker {
   x: number;
   y: number;
   sticker: string;
+  rotation: number;
 
-  constructor(x: number, y: number, sticker: string) {
+  constructor(x: number, y: number, sticker: string, rotation: number) {
     this.x = x;
     this.y = y;
     this.sticker = sticker;
+    this.rotation = rotation;
   }
 
-  // Method to draw the sticker on the canvas
   draw(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rotation);
     ctx.font = "32px Arial";
-    ctx.fillText(this.sticker, this.x - 16, this.y + 16); // Centering the sticker
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(this.sticker, 0, 0);
+    ctx.restore();
   }
 
-  // Method to reposition the sticker
   drag(x: number, y: number) {
     this.x = x;
     this.y = y;
   }
 }
 
-// Class to represent the sticker preview
+// Updated StickerPreview class with rotation
 class StickerPreview {
   x: number;
   y: number;
   sticker: string;
+  rotation: number;
 
-  constructor(x: number, y: number, sticker: string) {
+  constructor(x: number, y: number, sticker: string, rotation: number) {
     this.x = x;
     this.y = y;
     this.sticker = sticker;
+    this.rotation = rotation;
   }
 
-  // Method to draw the sticker preview on the canvas
   draw(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rotation);
     ctx.font = "32px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-    ctx.fillText(this.sticker, this.x - 16, this.y + 16); // Centering the sticker preview
+    ctx.fillText(this.sticker, 0, 0);
+    ctx.restore();
   }
 
-  // Update the position of the sticker preview
   updatePosition(x: number, y: number) {
     this.x = x;
     this.y = y;
@@ -185,16 +204,16 @@ let stickersPlaced: Sticker[] = [];
 let redoStack: (MarkerLine | Sticker)[] = [];
 let currentLine: MarkerLine | null = null;
 
-// ** Marker Drawing Logic **
+// Marker drawing logic remains the same
 const startMarkerLine = (e: MouseEvent) => {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
 
-  currentLine = new MarkerLine(x, y, currentThickness);
+  currentLine = new MarkerLine(x, y, currentThickness, currentColor);
   strokes.push(currentLine);
   isDrawing = true;
-  redoStack = []; // Clear redo stack
+  redoStack = [];
 };
 
 const continueMarkerLine = (e: MouseEvent) => {
@@ -212,7 +231,7 @@ const finishMarkerLine = () => {
   currentLine = null;
 };
 
-// ** Sticker Logic **
+// Updated sticker placement with rotation
 const startStickerPlacement = (e: MouseEvent) => {
   if (!isStickerMode) return;
 
@@ -221,16 +240,16 @@ const startStickerPlacement = (e: MouseEvent) => {
   const y = e.clientY - rect.top;
 
   if (currentSticker) {
-    stickersPlaced.push(new Sticker(x, y, currentSticker.sticker)); // Place the sticker
-    redoStack = []; // Clear redo stack
-    canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event
-    stickerPreview = null; // Hide the preview after placing
+    stickersPlaced.push(new Sticker(x, y, currentSticker.sticker, currentRotation));
+    redoStack = [];
+    canvas.dispatchEvent(new Event("drawing-changed"));
+    stickerPreview = null;
   }
 };
 
-// Update sticker preview position as the mouse moves
+// Updated sticker preview with rotation
 const updateStickerPreview = (e: MouseEvent) => {
-  if (!isStickerMode) return; // Only update preview in sticker mode
+  if (!isStickerMode) return;
 
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
@@ -238,40 +257,36 @@ const updateStickerPreview = (e: MouseEvent) => {
 
   if (currentSticker && !isDrawing) {
     if (!stickerPreview) {
-      stickerPreview = new StickerPreview(x, y, currentSticker.sticker); // Create sticker preview
+      stickerPreview = new StickerPreview(x, y, currentSticker.sticker, currentRotation);
     } else {
-      stickerPreview.updatePosition(x, y); // Update sticker preview position
+      stickerPreview.updatePosition(x, y);
     }
-    canvas.dispatchEvent(new Event("drawing-changed")); // Dispatch custom event to redraw the canvas
+    canvas.dispatchEvent(new Event("drawing-changed"));
   }
 };
 
-// Redraw the canvas based on the strokes and stickers
+// Canvas redraw function remains the same
 const redrawCanvas = () => {
-  ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Display all the lines in the strokes array
   for (const stroke of strokes) {
     stroke.display(ctx);
   }
 
-  // Display all the stickers in the stickers array
   for (const sticker of stickersPlaced) {
     sticker.draw(ctx);
   }
 
-  // Display the tool preview if it exists and user is not drawing or in sticker mode
   if (!isDrawing && toolPreview && !isStickerMode) {
     toolPreview.draw(ctx);
   }
 
-  // Display sticker preview if in sticker mode
   if (stickerPreview) {
     stickerPreview.draw(ctx);
   }
 };
 
-// Undo/Redo Logic
+// Undo/Redo functions remain the same
 const undoAction = () => {
   const lastAction = strokes.pop() || stickersPlaced.pop();
   if (lastAction) {
@@ -289,7 +304,6 @@ const redoAction = () => {
   }
 };
 
-// Clear canvas
 const clearCanvas = () => {
   strokes = [];
   stickersPlaced = [];
@@ -297,27 +311,36 @@ const clearCanvas = () => {
   canvas.dispatchEvent(new Event("drawing-changed"));
 };
 
-// Select thickness for markers
+// Tool selection
 thinTool.addEventListener("click", () => {
   currentThickness = 3;
-  toolPreview = new ToolPreview(0, 0, currentThickness);
+  toolPreview = new ToolPreview(0, 0, currentThickness, currentColor);
   isStickerMode = false;
 });
 
 thickTool.addEventListener("click", () => {
   currentThickness = 10;
-  toolPreview = new ToolPreview(0, 0, currentThickness);
+  toolPreview = new ToolPreview(0, 0, currentThickness, currentColor);
   isStickerMode = false;
 });
 
-// Select sticker mode with a specific sticker
+// Color picker event listener
+colorPicker.addEventListener("input", (e) => {
+  currentColor = (e.target as HTMLInputElement).value;
+  if (toolPreview) {
+    toolPreview = new ToolPreview(toolPreview.x, toolPreview.y, currentThickness, currentColor);
+    canvas.dispatchEvent(new Event("drawing-changed"));
+  }
+});
+
+// Updated selectSticker function
 const selectSticker = (index: number) => {
-  currentSticker = new Sticker(0, 0, stickers[index].emoji);
+  currentSticker = new Sticker(0, 0, stickers[index].emoji, currentRotation);
   isStickerMode = true;
-  stickerPreview = null; // Reset the preview when selecting a new sticker
+  stickerPreview = null;
 };
 
-// Add custom sticker using prompt
+// Add custom sticker button handler
 addStickerButton.addEventListener("click", () => {
   const customSticker = prompt("Enter an emoji or character for your custom sticker:", "⭐");
   if (customSticker) {
@@ -326,20 +349,18 @@ addStickerButton.addEventListener("click", () => {
   }
 });
 
-// Export Canvas to PNG
+// Export function remains the same
 const exportCanvas = () => {
   const exportCanvas = document.createElement("canvas");
   exportCanvas.width = 1024;
   exportCanvas.height = 1024;
   const exportCtx = exportCanvas.getContext("2d")!;
 
-  exportCtx.scale(4, 4); // Scale to 4x for 1024x1024 output
+  exportCtx.scale(4, 4);
 
-  // Draw all lines and stickers on export canvas
   strokes.forEach(stroke => stroke.display(exportCtx));
   stickersPlaced.forEach(sticker => sticker.draw(exportCtx));
 
-  // Export canvas to PNG and trigger download
   exportCanvas.toBlob(blob => {
     if (blob) {
       const url = URL.createObjectURL(blob);
@@ -352,7 +373,7 @@ const exportCanvas = () => {
   });
 };
 
-// Add event listeners
+// Event listeners
 canvas.addEventListener("mousedown", (e) => {
   if (isStickerMode) startStickerPlacement(e);
   else startMarkerLine(e);
