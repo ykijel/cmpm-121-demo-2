@@ -45,9 +45,11 @@ let isStickerMode = false; // Default to marker mode
 
 // Array of stickers, including initial stickers and custom stickers
 let stickers = [
-  { emoji: "🌟" },
-  { emoji: "🎃" },
-  { emoji: "❤️" },
+  { emoji: "🌸" },
+  { emoji: "✨" },
+  { emoji: "💎" },
+  { emoji: "🎨" },
+  { emoji: "🍀" },
 ];
 
 // Create buttons for each sticker in the stickers array
@@ -297,13 +299,13 @@ const clearCanvas = () => {
 
 // Select thickness for markers
 thinTool.addEventListener("click", () => {
-  currentThickness = 2;
+  currentThickness = 3;
   toolPreview = new ToolPreview(0, 0, currentThickness);
   isStickerMode = false;
 });
 
 thickTool.addEventListener("click", () => {
-  currentThickness = 6;
+  currentThickness = 10;
   toolPreview = new ToolPreview(0, 0, currentThickness);
   isStickerMode = false;
 });
