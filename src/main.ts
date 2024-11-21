@@ -3,6 +3,10 @@ import "./style.css";
 const APP_NAME = "Yahli's Game";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
+const STICKER_FONT = "32px Arial";
+const STICKER_TEXT_ALIGN = "center";
+const STICKER_TEXT_BASELINE = "middle";
+
 // UI remains the same
 app.innerHTML = `
   <h1>${APP_NAME}</h1>
@@ -153,9 +157,9 @@ class Sticker {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rotation);
-    ctx.font = "32px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.font = STICKER_FONT;
+    ctx.textAlign = STICKER_TEXT_ALIGN;
+    ctx.textBaseline = STICKER_TEXT_BASELINE;
     ctx.fillText(this.sticker, 0, 0);
     ctx.restore();
   }
@@ -184,9 +188,9 @@ class StickerPreview {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rotation);
-    ctx.font = "32px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.font = STICKER_FONT;
+    ctx.textAlign = STICKER_TEXT_ALIGN;
+    ctx.textBaseline = STICKER_TEXT_BASELINE;
     ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
     ctx.fillText(this.sticker, 0, 0);
     ctx.restore();
@@ -265,17 +269,22 @@ const updateStickerPreview = (e: MouseEvent) => {
   }
 };
 
+// Display the stroke
+const renderStroke = (stroke: MarkerLine, ctx: CanvasRenderingContext2D) => {
+  stroke.display(ctx);
+};
+
+// Draw the sticker
+const renderSticker = (sticker: Sticker, ctx: CanvasRenderingContext2D) => {
+  sticker.draw(ctx);
+};
+
 // Canvas redraw function remains the same
 const redrawCanvas = () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  for (const stroke of strokes) {
-    stroke.display(ctx);
-  }
-
-  for (const sticker of stickersPlaced) {
-    sticker.draw(ctx);
-  }
+  strokes.forEach(stroke => renderStroke(stroke, ctx));
+  stickersPlaced.forEach(sticker => renderSticker(sticker, ctx));
 
   if (!isDrawing && toolPreview && !isStickerMode) {
     toolPreview.draw(ctx);
