@@ -24,6 +24,11 @@ app.innerHTML = `
   <div id="stickerButtons">
     <!-- Sticker buttons will be populated dynamically -->
   </div>
+  <div>
+    <label for="rotationSlider">Rotate Sticker (0-360):</label>
+    <input type="range" id="rotationSlider" min="0" max="360" value="0">
+    <output id="outputValue">0</output>
+  </div>
   <button id="addStickerButton">Add Custom Sticker</button>
   <button id="exportButton">Export</button>
 `;
@@ -38,6 +43,13 @@ const thickTool = document.getElementById("thickTool")!;
 const addStickerButton = document.getElementById("addStickerButton")!;
 const exportButton = document.getElementById("exportButton")!;
 const colorPicker = document.getElementById("colorPicker") as HTMLInputElement;
+const rotationSlider: HTMLInputElement | null = document.querySelector<HTMLInputElement>('#rotationSlider');
+const rotationOutput: HTMLOutputElement | null = document.querySelector<HTMLOutputElement>('#outputValue');
+if (rotationSlider && rotationOutput) {
+    rotationSlider.addEventListener('input', () => {
+        rotationOutput.innerHTML = rotationSlider.value;
+    });
+}
 
 // State variables
 let currentThickness = 2;
@@ -59,8 +71,8 @@ let stickers = [
 ];
 
 // Function to get random rotation (in radians)
-const getRandomRotation = () => {
-  return Math.random() * Math.PI * 2;
+const getRotation = () => {
+  return +rotationSlider!.value;
 };
 
 // Updated create buttons function to handle rotation
@@ -72,7 +84,7 @@ const createStickerButtons = () => {
     button.textContent = sticker.emoji;
     button.addEventListener("click", () => {
       // Get new random rotation each time button is clicked
-      currentRotation = getRandomRotation();
+      currentRotation = getRotation();
       selectSticker(index);
     });
     stickerButtonsContainer.appendChild(button);
